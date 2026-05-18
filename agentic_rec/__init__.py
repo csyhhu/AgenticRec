@@ -1,0 +1,53 @@
+"""AgenticRec — From Pipeline to Council.
+
+A lightweight agentic framework for search & recommendation.
+"""
+from .core import (
+    AgentMessage,
+    BaseAgent,
+    Memory,
+    Tool,
+    ToolRegistry,
+    Item,
+    Decision,
+    Trace,
+)
+from .llm import BaseLLM, MockLLM
+from .agents import (
+    RecallAgent,
+    RankAgent,
+    RerankAgent,
+    ExplainAgent,
+    CriticAgent,
+    OrchestratorAgent,
+)
+from .pipeline import AgenticPipeline, PipelineResult
+from .tools import VectorTool, TagTool, FeatureTool, BizRuleTool, HotTool
+
+__all__ = [
+    "AgentMessage",
+    "BaseAgent",
+    "Memory",
+    "Tool",
+    "ToolRegistry",
+    "Item",
+    "Decision",
+    "Trace",
+    "BaseLLM",
+    "MockLLM",
+    "RecallAgent",
+    "RankAgent",
+    "RerankAgent",
+    "ExplainAgent",
+    "CriticAgent",
+    "OrchestratorAgent",
+    "AgenticPipeline",
+    "PipelineResult",
+    "VectorTool",
+    "TagTool",
+    "FeatureTool",
+    "BizRuleTool",
+    "HotTool",
+]
+
+__version__ = "0.1.0"
