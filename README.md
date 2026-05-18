@@ -153,6 +153,6 @@ MIT — 自由商用、欢迎 PR。
   title  = {AgenticRec: From Pipeline to Council, A Lightweight Agentic Framework for Search and Recommendation},
   author = {GuoXun},
   year   = {2026},
-  url    = {https://github.com/<your-org>/AgenticRec}
+  url    = {https://github.com/guoxun/AgenticRec}
 }
 ```
