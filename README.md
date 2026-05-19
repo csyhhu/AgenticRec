@@ -2,6 +2,8 @@
 
 > **From Pipeline to Council** — 一个把搜索推荐从"管线"重构为"议会"的轻量级智能体框架。
 
+[English README](README_EN.md) | 中文说明
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
 [![Stage: Alpha](https://img.shields.io/badge/stage-alpha-orange.svg)]()
@@ -170,22 +172,6 @@ TagBaseline            1.0        0.907          1.0        0.663          0.0  
 | Lagent / SmolAgents | 极简 Agent loop | 设计风格借鉴 |
 | RecBole / EasyRec | 推荐算法库 | 互补（前者是模型动物园，本项目是编排骨架）|
 | Dify / Coze | 通用 Agent 平台 | 不重叠（通用 vs 搜广推垂直）|
-
-## English Version
-
-**AgenticRec** is a lightweight agentic framework for search and recommendation systems. It reframes the conventional sequential pipeline — recall, ranking, reranking, explanation, and monitoring — as a collaborative council of specialized agents.
-
-Instead of replacing recommender models with LLMs, AgenticRec uses agents as a **meta-decision layer** that decides which retrieval tools, ranking models, business rules, fallback strategies, and evaluation traces should be activated under different scenarios.
-
-Core design points:
-
-- **From pipeline to council**: `RecallAgent`, `RankAgent`, `RerankAgent`, `ExplainAgent`, and `CriticAgent` are coordinated by `OrchestratorAgent`.
-- **Tool-first architecture**: vector retrieval, feature services, hot fallback, business rules, and A/B hooks are exposed as tools.
-- **LLM-optional execution**: `MockLLM` runs the full workflow without external API keys, making the framework reproducible and easy to test.
-- **Observable decisions**: every agent action is recorded as trace events for replay, debugging, and A/B analysis.
-- **Built-in benchmark**: `AgenticRec-Bench` evaluates `HitRate@K`, `NDCG@K`, coverage, diversity, latency, trace steps, and trace cost across classic, cold-start, and evolving-interest scenarios.
-
-In short, AgenticRec explores how agentic systems can make search and recommendation pipelines more adaptive, explainable, and evaluable without abandoning the strengths of traditional recommender models.
 
 ## License
 
