@@ -171,6 +171,22 @@ TagBaseline            1.0        0.907          1.0        0.663          0.0  
 | RecBole / EasyRec | 推荐算法库 | 互补（前者是模型动物园，本项目是编排骨架）|
 | Dify / Coze | 通用 Agent 平台 | 不重叠（通用 vs 搜广推垂直）|
 
+## English Version
+
+**AgenticRec** is a lightweight agentic framework for search and recommendation systems. It reframes the conventional sequential pipeline — recall, ranking, reranking, explanation, and monitoring — as a collaborative council of specialized agents.
+
+Instead of replacing recommender models with LLMs, AgenticRec uses agents as a **meta-decision layer** that decides which retrieval tools, ranking models, business rules, fallback strategies, and evaluation traces should be activated under different scenarios.
+
+Core design points:
+
+- **From pipeline to council**: `RecallAgent`, `RankAgent`, `RerankAgent`, `ExplainAgent`, and `CriticAgent` are coordinated by `OrchestratorAgent`.
+- **Tool-first architecture**: vector retrieval, feature services, hot fallback, business rules, and A/B hooks are exposed as tools.
+- **LLM-optional execution**: `MockLLM` runs the full workflow without external API keys, making the framework reproducible and easy to test.
+- **Observable decisions**: every agent action is recorded as trace events for replay, debugging, and A/B analysis.
+- **Built-in benchmark**: `AgenticRec-Bench` evaluates `HitRate@K`, `NDCG@K`, coverage, diversity, latency, trace steps, and trace cost across classic, cold-start, and evolving-interest scenarios.
+
+In short, AgenticRec explores how agentic systems can make search and recommendation pipelines more adaptive, explainable, and evaluable without abandoning the strengths of traditional recommender models.
+
 ## License
 
 MIT — 自由商用、欢迎 PR。
@@ -181,9 +197,15 @@ MIT — 自由商用、欢迎 PR。
 
 ```bibtex
 @misc{agenticrec2026,
-  title  = {AgenticRec: From Pipeline to Council, A Lightweight Agentic Framework for Search and Recommendation},
-  author = {GuoXun},
-  year   = {2026},
-  url    = {https://github.com/guoxun/AgenticRec}
+  title        = {AgenticRec: From Pipeline to Council, A Lightweight Agentic Framework for Search and Recommendation},
+  author       = {GuoXun},
+  year         = {2026},
+  howpublished = {GitHub repository},
+  url          = {https://github.com/guoxun/AgenticRec},
+  note         = {An agentic search and recommendation framework with tool orchestration, decision traces, and built-in benchmark evaluation}
 }
 ```
+
+English reference description:
+
+> AgenticRec is a lightweight agentic framework for search and recommendation systems. It transforms the traditional recall-ranking-reranking pipeline into a council of specialized agents coordinated by an orchestrator. The framework emphasizes tool orchestration, optional LLM reasoning, observable decision traces, and built-in benchmark evaluation for classic, cold-start, and evolving-interest recommendation scenarios.
