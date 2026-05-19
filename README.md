@@ -120,15 +120,46 @@ mv_7102  0.881  ← 用户上周看完同导演作品，长记忆触发
 4. **离线可灰度**：所有 Agent 决策都打 trace，方便对比 A/B。  
 5. **LLM 可选**：MockLLM 模式下不调任何外部 API，纯规则也能跑通完整链路。
 
+## AgenticRec-Bench
+
+`AgenticRec` 现在内置一个零依赖评测闭环：`AgenticRec-Bench`。
+
+它不是工业离线评测的替代品，而是一个可执行的可信度层：
+
+- **3 类场景**：`classic` / `cold_start` / `evolving_interest`
+- **3 个方法**：`AgenticRec` / `HotBaseline` / `TagBaseline`
+- **7 个指标**：`HitRate@K`、`NDCG@K`、`Coverage`、`Diversity`、`Latency`、`TraceSteps`、`TraceCost`
+- **9 个任务 + 16 个 item**：无需下载数据、无需 API key，克隆后即可复现
+
+```bash
+PYTHONPATH=. python -m agentic_rec.bench
+# or after install
+agentic-rec-bench --top-k 5
+```
+
+示例输出：
+
+```text
+AgenticRec-Bench | tasks=9 corpus=16 top_k=5
+method          hit_rate@5       ndcg@5     coverage    diversity   latency_ms  trace_steps   trace_cost
+---------------------------------------------------------------------------------------------------------
+AgenticRec          0.8889       0.7778          1.0        0.716       0.1588            5          5.0
+HotBaseline         0.6667       0.2553       0.3125       0.8667          0.0            0          0.0
+TagBaseline            1.0        0.907          1.0        0.663          0.0            0          0.0
+```
+
+> 这让 AgenticRec 的核心主张可被验证：Agent 层不仅产出推荐列表，还产出可观测的决策 trace，可用于 A/B、回放和策略调试。
+
 ## 路线图
 
 - [x] 五 Agent 核心 + Mock LLM
 - [x] 工具注册表 + 向量/特征/业务规则
 - [x] 决策 trace 与可视化 dump
+- [x] 离线评测闭环（HitRate/NDCG/Coverage/Diversity/Latency/TraceCost）
 - [ ] OpenAI / 通义 / DeepSeek backbone 适配
 - [ ] Faiss / Milvus 真实向量后端
 - [ ] LangGraph / OpenAI-Agents-SDK 对接 Adapter
-- [ ] 在线服务化（FastAPI）+ 离线评估（HitRate/NDCG）
+- [ ] 在线服务化（FastAPI）+ Trace Dashboard
 - [ ] 工业场景蓝本：电商首页 / 短视频 Feed / 站内搜索
 
 ## 与已有框架的关系

@@ -19,6 +19,9 @@ classifiers = [
 ]
 dependencies = []
 
+[project.scripts]
+agentic-rec-bench = "agentic_rec.bench:main"
+
 [project.optional-dependencies]
 dev = ["pytest>=7"]
 
