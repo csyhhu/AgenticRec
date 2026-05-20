@@ -5,7 +5,11 @@ MockLLM is a deterministic, dependency-free stand-in for tests and demos.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List
+import json
+import os
+from typing import Any, Dict, List, Optional
+from urllib.error import URLError
+from urllib.request import Request, urlopen
 
 
 class BaseLLM:
@@ -41,3 +45,59 @@ class MockLLM(BaseLLM):
         if "critic" in low or "审查" in last:
             return "ok"
         return "ok"
+
+
+class DeepSeekLLM(BaseLLM):
+    """DeepSeek API backbone. OpenAI-compatible, drop-in replacement for MockLLM.
+
+    Args:
+        api_key: DeepSeek API token (``sk-...``). If empty, reads ``DEEPSEEK_API_KEY`` env var.
+        model: Model name (default ``deepseek-chat``, or ``deepseek-reasoner``).
+        base_url: Override the API base URL.
+        temperature: Sampling temperature (0–2).
+        max_tokens: Max tokens in the response.
+    """
+
+    name = "deepseek"
+
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model: str = "deepseek-chat",
+        base_url: str = "https://api.deepseek.com",
+        temperature: float = 0.7,
+        max_tokens: int = 512,
+    ) -> None:
+        print(f"=== DeepSeek LLM initialized with model={model} ===")
+        self.api_key = api_key if api_key is not None else os.environ.get("DEEPSEEK_API_KEY", "")
+        self.model = model
+        self.base_url = base_url.rstrip("/")
+        self.temperature = temperature
+        self.max_tokens = max_tokens
+
+    def chat(self, messages: List[Dict[str, str]], **kwargs: Any) -> str:
+        if not self.api_key:
+            raise ValueError(
+                "DeepSeek API key not set. Pass api_key= or set DEEPSEEK_API_KEY env var."
+            )
+
+        url = f"{self.base_url}/v1/chat/completions"
+        body = json.dumps({
+            "model": self.model,
+            "messages": messages,
+            "temperature": kwargs.get("temperature", self.temperature),
+            "max_tokens": kwargs.get("max_tokens", self.max_tokens),
+            "stream": False,
+        }).encode("utf-8")
+
+        req = Request(url, data=body, method="POST")
+        req.add_header("Authorization", f"Bearer {self.api_key}")
+        req.add_header("Content-Type", "application/json")
+
+        try:
+            with urlopen(req, timeout=kwargs.get("timeout", 30)) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+        except URLError as e:
+            raise RuntimeError(f"DeepSeek API request failed: {e}") from e
+
+        return data["choices"][0]["message"]["content"]

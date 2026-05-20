@@ -2,8 +2,13 @@
 
 Run:
     python examples/quickstart.py
+
+To use a real DeepSeek backbone, set the env var:
+    export DEEPSEEK_API_KEY="sk-xxx"
 """
-from agentic_rec import AgenticPipeline
+import os
+
+from agentic_rec import AgenticPipeline, DeepSeekLLM
 
 
 CORPUS = [
@@ -31,7 +36,8 @@ CORPUS = [
 
 
 def main() -> None:
-    pipe = AgenticPipeline(corpus=CORPUS, top_n=8)
+    llm = DeepSeekLLM() if os.environ.get("DEEPSEEK_API_KEY") else None
+    pipe = AgenticPipeline(corpus=CORPUS, top_n=8, llm=llm)
 
     # Inject a small user profile so explanations have something to say
     pipe.memory.update_profile("u_42", tags={"悬疑": 0.8, "轻松": 0.4})

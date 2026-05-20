@@ -61,6 +61,7 @@
 
 ```bash
 pip install -e .
+# export DEEPSEEK_API_KEY=sk-YOUR_DS_KEY  # export your token here to enable the deepseek llm backbone
 python examples/quickstart.py
 ```
 
@@ -158,7 +159,7 @@ TagBaseline            1.0        0.907          1.0        0.663          0.0  
 - [x] 工具注册表 + 向量/特征/业务规则
 - [x] 决策 trace 与可视化 dump
 - [x] 离线评测闭环（HitRate/NDCG/Coverage/Diversity/Latency/TraceCost）
-- [ ] OpenAI / 通义 / DeepSeek backbone 适配
+- [x] OpenAI / 通义 / DeepSeek backbone 适配
 - [ ] Faiss / Milvus 真实向量后端
 - [ ] LangGraph / OpenAI-Agents-SDK 对接 Adapter
 - [ ] 在线服务化（FastAPI）+ Trace Dashboard
