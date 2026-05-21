@@ -12,7 +12,7 @@ from .core import (
     Decision,
     Trace,
 )
-from .llm import BaseLLM, MockLLM
+from .llm import BaseLLM, MockLLM, DeepSeekLLM
 from .agents import (
     RecallAgent,
     RankAgent,
@@ -35,6 +35,7 @@ __all__ = [
     "Trace",
     "BaseLLM",
     "MockLLM",
+    "DeepSeekLLM",
     "RecallAgent",
     "RankAgent",
     "RerankAgent",

@@ -11,3 +11,4 @@ dist/
 *.log
 *.trace.json
 .pytest_cache/
+.*
