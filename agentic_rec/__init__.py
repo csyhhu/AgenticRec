@@ -16,11 +16,13 @@ from .llm import BaseLLM, MockLLM, DeepSeekLLM
 from .agents import (
     RecallAgent,
     RankAgent,
+    CollaborationAgent,
     RerankAgent,
     ExplainAgent,
     CriticAgent,
     OrchestratorAgent,
 )
+from .collab import AgentProfile, CollaborationReport, PreferenceVote
 from .pipeline import AgenticPipeline, PipelineResult
 from .tools import VectorTool, TagTool, FeatureTool, BizRuleTool, HotTool
 
@@ -38,10 +40,14 @@ __all__ = [
     "DeepSeekLLM",
     "RecallAgent",
     "RankAgent",
+    "CollaborationAgent",
     "RerankAgent",
     "ExplainAgent",
     "CriticAgent",
     "OrchestratorAgent",
+    "AgentProfile",
+    "CollaborationReport",
+    "PreferenceVote",
     "AgenticPipeline",
     "PipelineResult",
     "VectorTool",

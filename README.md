@@ -14,7 +14,7 @@
 传统搜广推系统是一条**串行管线**：召回 → 粗排 → 精排 → 重排。  
 每一段是一个固定的算子，跑完就走，**不会反思、不会争辩、不会换工具**。
 
-`AgenticRec` 把这条管线**翻译成五个 Agent**：
+`AgenticRec` 把这条管线**翻译成五个核心 Agent**，并在第三阶段加入 `CollaborationAgent`，支持相似用户 Agent 与候选 Item Agent 的动态招募：
 
 ```
                   ┌──────────────────────────┐
@@ -24,10 +24,10 @@
                              │
        ┌──────────┬──────────┼──────────┬──────────┐
        │          │          │          │          │
-  ┌────▼────┐ ┌──▼─────┐ ┌──▼─────┐ ┌──▼─────┐ ┌──▼──────┐
-  │ Recall  │ │ Rank   │ │ Rerank │ │Explain │ │ Critic  │
-  │ Agent   │ │ Agent  │ │ Agent  │ │ Agent  │ │ Agent   │
-  └─────────┘ └────────┘ └────────┘ └────────┘ └─────────┘
+  ┌────▼────┐ ┌──▼─────┐ ┌──▼──────┐ ┌──▼─────┐ ┌──▼──────┐
+  │ Recall  │ │ Rank   │ │ Collab  │ │ Rerank │ │ Critic  │
+  │ Agent   │ │ Agent  │ │ Agent   │ │ Agent  │ │ Agent   │
+  └─────────┘ └────────┘ └─────────┘ └────────┘ └─────────┘
        │          │          │          │          │
        └──────────┴──────┬───┴──────────┴──────────┘
                          │
@@ -130,7 +130,7 @@ mv_7102  0.881  ← 用户上周看完同导演作品，长记忆触发
 它不是工业离线评测的替代品，而是一个可执行的可信度层：
 
 - **3 类场景**：`classic` / `cold_start` / `evolving_interest`
-- **3 个方法**：`AgenticRec` / `HotBaseline` / `TagBaseline`
+- **4 个方法**：`AgenticRec-Collab` / `AgenticRec-Core` / `HotBaseline` / `TagBaseline`
 - **7 个指标**：`HitRate@K`、`NDCG@K`、`Coverage`、`Diversity`、`Latency`、`TraceSteps`、`TraceCost`
 - **9 个任务 + 16 个 item**：无需下载数据、无需 API key，克隆后即可复现
 
@@ -146,7 +146,8 @@ agentic-rec-bench --top-k 5
 AgenticRec-Bench | tasks=9 corpus=16 top_k=5
 method          hit_rate@5       ndcg@5     coverage    diversity   latency_ms  trace_steps   trace_cost
 ---------------------------------------------------------------------------------------------------------
-AgenticRec          0.8889       0.7778          1.0        0.716       0.1588            5          5.0
+AgenticRec-Collab      0.8889       0.7986          1.0       0.7099       0.2702            6          6.0
+AgenticRec-Core      0.8889       0.7778          1.0        0.716       0.1288            5          5.0
 HotBaseline         0.6667       0.2553       0.3125       0.8667          0.0            0          0.0
 TagBaseline            1.0        0.907          1.0        0.663          0.0            0          0.0
 ```
@@ -160,6 +161,7 @@ TagBaseline            1.0        0.907          1.0        0.663          0.0  
 - [x] 决策 trace 与可视化 dump
 - [x] 离线评测闭环（HitRate/NDCG/Coverage/Diversity/Latency/TraceCost）
 - [x] OpenAI / 通义 / DeepSeek backbone 适配
+- [x] 第三阶段多智能体协同（SimilarUserAgent / ItemAgent / CollaborationAgent）
 - [ ] Faiss / Milvus 真实向量后端
 - [ ] LangGraph / OpenAI-Agents-SDK 对接 Adapter
 - [ ] 在线服务化（FastAPI）+ Trace Dashboard
@@ -171,6 +173,7 @@ TagBaseline            1.0        0.907          1.0        0.663          0.0  
 |---|---|---|
 | LangGraph / AutoGen | 通用多智能体编排 | 上游可插拔的 backbone |
 | Lagent / SmolAgents | 极简 Agent loop | 设计风格借鉴 |
+| MACF / MACRec | 多智能体协同推荐 | Stage 3 借鉴动态招募与中心协调思想 |
 | RecBole / EasyRec | 推荐算法库 | 互补（前者是模型动物园，本项目是编排骨架）|
 | Dify / Coze | 通用 Agent 平台 | 不重叠（通用 vs 搜广推垂直）|
 
@@ -189,10 +192,10 @@ MIT — 自由商用、欢迎 PR。
   year         = {2026},
   howpublished = {GitHub repository},
   url          = {https://github.com/guoxun/AgenticRec},
-  note         = {An agentic search and recommendation framework with tool orchestration, decision traces, and built-in benchmark evaluation}
+  note         = {An agentic search and recommendation framework with tool orchestration, collaborative user/item agents, decision traces, and built-in benchmark evaluation}
 }
 ```
 
 English reference description:
 
-> AgenticRec is a lightweight agentic framework for search and recommendation systems. It transforms the traditional recall-ranking-reranking pipeline into a council of specialized agents coordinated by an orchestrator. The framework emphasizes tool orchestration, optional LLM reasoning, observable decision traces, and built-in benchmark evaluation for classic, cold-start, and evolving-interest recommendation scenarios.
+> AgenticRec is a lightweight agentic framework for search and recommendation systems. It transforms the traditional recall-ranking-reranking pipeline into a council of specialized agents coordinated by an orchestrator. The framework emphasizes tool orchestration, collaborative user/item agents, optional LLM reasoning, observable decision traces, and built-in benchmark evaluation for classic, cold-start, and evolving-interest recommendation scenarios.

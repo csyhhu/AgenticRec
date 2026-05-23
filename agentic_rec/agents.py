@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
+from .collab import CollaborationOrchestrator, apply_collaboration_scores
 from .core import AgentMessage, BaseAgent, Decision, Item
 
 
@@ -83,6 +84,40 @@ class RankAgent(BaseAgent):
         kept = items[: self.SKIP_THRESHOLD]
         return Decision(agent=self.name, thought=f"lite-rank, kept={len(kept)}",
                         action="rank", payload=kept)
+
+
+# ---------------------------------------------------------------------------
+class CollaborationAgent(BaseAgent):
+    """Recruit similar-user and item agents to refine ranking.
+
+    This is a lightweight MACF-style stage. It does not call a remote LLM;
+    instead it exposes the agent recruitment and voting mechanics in a fully
+    deterministic way so benchmark results remain reproducible.
+    """
+
+    name = "CollaborationAgent"
+
+    def __init__(self, llm=None, tools=None, memory=None, neighbor_profiles=None) -> None:
+        super().__init__(llm=llm, tools=tools, memory=memory)
+        self.orchestrator = CollaborationOrchestrator(neighbor_profiles)
+
+    def step(self, msg: AgentMessage, ctx: Dict[str, Any]) -> Decision:
+        items: List[Item] = msg.content.get("items", [])
+        user_id = ctx["user_id"]
+        profile = self.memory.profile_of(user_id)
+        user_tags = profile.get("tags", {})
+        report = self.orchestrator.run(items, user_tags=user_tags, query=ctx["query"])
+        reranked = apply_collaboration_scores(items, report)
+        payload = {
+            "items": reranked,
+            "report": {
+                "recruited_users": report.recruited_users,
+                "recruited_items": report.recruited_items,
+                "item_scores": report.item_scores,
+            },
+        }
+        return Decision(agent=self.name, thought=report.thought,
+                        action="collaborate", payload=payload)
 
 
 # ---------------------------------------------------------------------------
@@ -164,11 +199,12 @@ class OrchestratorAgent(BaseAgent):
     name = "OrchestratorAgent"
 
     def __init__(self, llm=None, tools=None, memory=None,
-                 recall=None, rank=None, rerank=None,
+                 recall=None, rank=None, collab=None, rerank=None,
                  explain=None, critic=None, max_retry: int = 1) -> None:
         super().__init__(llm=llm, tools=tools, memory=memory)
         self.recall = recall
         self.rank = rank
+        self.collab = collab
         self.rerank = rerank
         self.explain = explain
         self.critic = critic
@@ -191,14 +227,23 @@ class OrchestratorAgent(BaseAgent):
             trace.add(d_rank)
             items = d_rank.payload
 
-            # 3) rerank
+            # 3) optional multi-agent collaboration
+            if self.collab is not None:
+                d_collab = self.collab.run(
+                    AgentMessage(self.name, self.collab.name, "request",
+                                 content={"items": items}), ctx)
+                trace.add(d_collab)
+                items = d_collab.payload["items"]
+                ctx["collaboration"] = d_collab.payload["report"]
+
+            # 4) rerank
             d_re = self.rerank.run(
                 AgentMessage(self.name, self.rerank.name, "request",
                              content={"items": items}), ctx)
             trace.add(d_re)
             items = d_re.payload
 
-            # 4) critic
+            # 5) critic
             d_crit = self.critic.run(
                 AgentMessage(self.name, self.critic.name, "critique",
                              content={"items": items}), ctx)
@@ -210,7 +255,7 @@ class OrchestratorAgent(BaseAgent):
                 continue
             break
 
-        # 5) explain
+        # 6) explain
         d_exp = self.explain.run(
             AgentMessage(self.name, self.explain.name, "request",
                          content={"items": items}), ctx)

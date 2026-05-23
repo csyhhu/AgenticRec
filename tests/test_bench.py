@@ -6,8 +6,8 @@ def test_benchmark_report_shape():
     report = run_benchmark(top_k=5)
     assert report["tasks"] == 9
     assert report["corpus_size"] == 16
-    assert set(report["methods"]) == {"AgenticRec", "HotBaseline", "TagBaseline"}
-    metrics = report["methods"]["AgenticRec"]["summary"]["overall"]
+    assert set(report["methods"]) == {"AgenticRec-Collab", "AgenticRec-Core", "HotBaseline", "TagBaseline"}
+    metrics = report["methods"]["AgenticRec-Collab"]["summary"]["overall"]
     assert metrics["hit_rate@5"] >= 0
     assert metrics["ndcg@5"] >= 0
     assert metrics["coverage"] > 0
