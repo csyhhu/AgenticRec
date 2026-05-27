@@ -14,7 +14,7 @@
 传统搜广推系统是一条**串行管线**：召回 → 粗排 → 精排 → 重排。  
 每一段是一个固定的算子，跑完就走，**不会反思、不会争辩、不会换工具**。
 
-`AgenticRec` 把这条管线**翻译成五个核心 Agent**，并在第三阶段加入 `CollaborationAgent`，支持相似用户 Agent 与候选 Item Agent 的动态招募：
+`AgenticRec` 把这条管线**翻译成五个核心 Agent**，并在第四阶段加入 `IntentGate`，让系统按场景决定是否启用 `CollaborationAgent`：
 
 ```
                   ┌──────────────────────────┐
@@ -25,8 +25,8 @@
        ┌──────────┬──────────┼──────────┬──────────┐
        │          │          │          │          │
   ┌────▼────┐ ┌──▼─────┐ ┌──▼──────┐ ┌──▼─────┐ ┌──▼──────┐
-  │ Recall  │ │ Rank   │ │ Collab  │ │ Rerank │ │ Critic  │
-  │ Agent   │ │ Agent  │ │ Agent   │ │ Agent  │ │ Agent   │
+  │ Recall  │ │ Rank   │ │Intent │ │ Rerank │ │ Critic  │
+  │ Agent   │ │ Agent  │ │ Gate   │ │ Agent  │ │ Agent   │
   └─────────┘ └────────┘ └─────────┘ └────────┘ └─────────┘
        │          │          │          │          │
        └──────────┴──────┬───┴──────────┴──────────┘
@@ -37,6 +37,8 @@
                   │ /Biz/ABTest │
                   └─────────────┘
 ```
+
+`IntentGate` 会在 Rank 之后读取 query、用户画像和候选集分布：稳定意图走 Core，冷启动/兴趣漂移/多意图再启用协同议会。
 
 每个 Agent：
 - 持有自己的**工具**（向量检索、特征服务、业务规则、A/B 实验）
@@ -49,8 +51,8 @@
 | 维度 | 传统管线 | AgenticRec |
 |---|---|---|
 | 召回策略 | 写死多路并行 | 由 RecallAgent 看 query/用户态**动态选**多路+权重 |
-| 冷启动 | if-else 分支硬切 | OrchestratorAgent 路由到冷启专用子图 |
-| 长尾意图 | 难以兜底 | CriticAgent 检测分布异常 → 回炉重召回 |
+| 冷启动 | if-else 分支硬切 | IntentGate 识别冷启 → 启用协同议会 |
+| 兴趣漂移 | 难以兜底 | IntentGate 检测 query/profile mismatch → 启用相似用户与物料投票 |
 | 可解释 | 离线人工归因 | ExplainAgent 在线生成可读理由 |
 | A/B 迭代 | 改代码、发版 | 改 Agent prompt 或 tool 即可 |
 
@@ -89,7 +91,7 @@ mv_7102  0.881  ← 用户上周看完同导演作品，长记忆触发
 [OrchestratorAgent] 本次决策：跳过粗排（候选<200直入精排），节省 12ms
 ```
 
-## 五个 Agent 各自做什么
+## 六个议会角色各自做什么
 
 ### 1. RecallAgent — 召回议员
 - 工具：`VectorTool` / `TagTool` / `KGTool` / `HotTool`
@@ -101,16 +103,26 @@ mv_7102  0.881  ← 用户上周看完同导演作品，长记忆触发
 - 决策：候选 < 阈值时**自动跳过**，节省时延
 - 反思：分布异常（全是同 tag）时回炉
 
-### 3. RerankAgent — 重排议员
+### 3. IntentGate — 协同闸门
+- 输入：query tags、用户画像、候选集 tag 分布、scene
+- 决策：稳定意图跳过协同，冷启动/兴趣漂移/多意图启用 `CollaborationAgent`
+- 价值：避免协同层在 classic 场景无脑介入，同时保留冷启动与兴趣漂移收益
+
+### 4. CollaborationAgent — 协同议员
+- 动态招募 `SimilarUserAgent` 与 `ItemAgent`
+- 让相似用户和候选物料分别投票
+- 将协同分 blend 回排序分，并写入 trace
+
+### 5. RerankAgent — 重排议员
 - 工具：业务规则、打散、提权、商业化插入
 - 决策：根据 scene（feed/搜索结果页/广告位）切策略
 - 反思：检查是否违反业务硬约束
 
-### 4. ExplainAgent — 解释议员
+### 6. ExplainAgent — 解释议员
 - 工具：item 元数据、用户长记忆
 - 输出：每个 item 一句**给运营/给用户**的可读理由
 
-### 5. CriticAgent — 监督议员（议会守门人）
+### 7. CriticAgent — 监督议员（议会守门人）
 - 不参与生成，只**审阅**整体输出
 - 检查：分布偏置、意图漂移、commercial/内容比例
 - 异常时**否决并触发重跑**
@@ -130,7 +142,7 @@ mv_7102  0.881  ← 用户上周看完同导演作品，长记忆触发
 它不是工业离线评测的替代品，而是一个可执行的可信度层：
 
 - **3 类场景**：`classic` / `cold_start` / `evolving_interest`
-- **4 个方法**：`AgenticRec-Collab` / `AgenticRec-Core` / `HotBaseline` / `TagBaseline`
+- **5 个方法**：`AgenticRec-Gated` / `AgenticRec-Collab` / `AgenticRec-Core` / `HotBaseline` / `TagBaseline`
 - **7 个指标**：`HitRate@K`、`NDCG@K`、`Coverage`、`Diversity`、`Latency`、`TraceSteps`、`TraceCost`
 - **9 个任务 + 16 个 item**：无需下载数据、无需 API key，克隆后即可复现
 
@@ -146,8 +158,9 @@ agentic-rec-bench --top-k 5
 AgenticRec-Bench | tasks=9 corpus=16 top_k=5
 method          hit_rate@5       ndcg@5     coverage    diversity   latency_ms  trace_steps   trace_cost
 ---------------------------------------------------------------------------------------------------------
-AgenticRec-Collab      0.8889       0.7986          1.0       0.7099       0.2702            6          6.0
-AgenticRec-Core      0.8889       0.7778          1.0        0.716       0.1288            5          5.0
+AgenticRec-Gated      0.8889       0.8054          1.0       0.7099       0.7184       6.6667       6.6667
+AgenticRec-Collab      0.8889       0.7986          1.0       0.7099       1.3269            6          6.0
+AgenticRec-Core      0.8889       0.7778          1.0        0.716        0.679            5          5.0
 HotBaseline         0.6667       0.2553       0.3125       0.8667          0.0            0          0.0
 TagBaseline            1.0        0.907          1.0        0.663          0.0            0          0.0
 ```
@@ -162,6 +175,7 @@ TagBaseline            1.0        0.907          1.0        0.663          0.0  
 - [x] 离线评测闭环（HitRate/NDCG/Coverage/Diversity/Latency/TraceCost）
 - [x] OpenAI / 通义 / DeepSeek backbone 适配
 - [x] 第三阶段多智能体协同（SimilarUserAgent / ItemAgent / CollaborationAgent）
+- [x] 第四阶段自适应协同闸门（IntentGate / Gated Collaboration）
 - [ ] Faiss / Milvus 真实向量后端
 - [ ] LangGraph / OpenAI-Agents-SDK 对接 Adapter
 - [ ] 在线服务化（FastAPI）+ Trace Dashboard
@@ -173,7 +187,7 @@ TagBaseline            1.0        0.907          1.0        0.663          0.0  
 |---|---|---|
 | LangGraph / AutoGen | 通用多智能体编排 | 上游可插拔的 backbone |
 | Lagent / SmolAgents | 极简 Agent loop | 设计风格借鉴 |
-| MACF / MACRec | 多智能体协同推荐 | Stage 3 借鉴动态招募与中心协调思想 |
+| MACF / MACRec | 多智能体协同推荐 | Stage 3 借鉴动态招募与中心协调思想，Stage 4 增加场景闸门避免全量调用 |
 | RecBole / EasyRec | 推荐算法库 | 互补（前者是模型动物园，本项目是编排骨架）|
 | Dify / Coze | 通用 Agent 平台 | 不重叠（通用 vs 搜广推垂直）|
 
@@ -192,10 +206,10 @@ MIT — 自由商用、欢迎 PR。
   year         = {2026},
   howpublished = {GitHub repository},
   url          = {https://github.com/guoxun/AgenticRec},
-  note         = {An agentic search and recommendation framework with tool orchestration, collaborative user/item agents, decision traces, and built-in benchmark evaluation}
+  note         = {An agentic search and recommendation framework with tool orchestration, adaptive collaboration gates, collaborative user/item agents, decision traces, and built-in benchmark evaluation}
 }
 ```
 
 English reference description:
 
-> AgenticRec is a lightweight agentic framework for search and recommendation systems. It transforms the traditional recall-ranking-reranking pipeline into a council of specialized agents coordinated by an orchestrator. The framework emphasizes tool orchestration, collaborative user/item agents, optional LLM reasoning, observable decision traces, and built-in benchmark evaluation for classic, cold-start, and evolving-interest recommendation scenarios.
+> AgenticRec is a lightweight agentic framework for search and recommendation systems. It transforms the traditional recall-ranking-reranking pipeline into a council of specialized agents coordinated by an orchestrator. The framework emphasizes tool orchestration, adaptive collaboration gates, collaborative user/item agents, optional LLM reasoning, observable decision traces, and built-in benchmark evaluation for classic, cold-start, and evolving-interest recommendation scenarios.

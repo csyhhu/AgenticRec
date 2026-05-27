@@ -15,6 +15,7 @@ from .agents import (
 )
 from .collab import AgentProfile, build_neighbor_profiles
 from .core import AgentMessage, Item, Memory, ToolRegistry, Trace
+from .gating import IntentGate
 from .llm import BaseLLM, MockLLM
 from .tools import BizRuleTool, FeatureTool, HotTool, TagTool, VectorTool
 
@@ -37,6 +38,8 @@ class AgenticPipeline:
         memory: Optional[Memory] = None,
         top_n: int = 10,
         enable_collaboration: bool = True,
+        adaptive_collaboration: bool = True,
+        intent_gate: Optional[IntentGate] = None,
         neighbor_profiles: Optional[List[AgentProfile]] = None,
     ) -> None:
         self.llm = llm or MockLLM()
@@ -44,6 +47,8 @@ class AgenticPipeline:
         self.tools = tools or ToolRegistry()
         self.top_n = top_n
         self.enable_collaboration = enable_collaboration
+        self.adaptive_collaboration = adaptive_collaboration
+        self.intent_gate = intent_gate or (IntentGate() if adaptive_collaboration else None)
         self.neighbor_profiles = neighbor_profiles or (build_neighbor_profiles(corpus) if corpus else [])
 
         if corpus and not self.tools.names():
@@ -70,7 +75,7 @@ class AgenticPipeline:
         self.orch = OrchestratorAgent(
             llm=self.llm, tools=self.tools, memory=self.memory,
             recall=self.recall, rank=self.rank, collab=self.collab, rerank=self.rerank,
-            explain=self.explain, critic=self.critic,
+            explain=self.explain, critic=self.critic, intent_gate=self.intent_gate,
         )
 
     def run(self, query: str, user_id: str = "anon",

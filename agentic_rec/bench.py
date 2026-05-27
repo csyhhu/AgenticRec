@@ -181,10 +181,12 @@ def agentic_runner(
     corpus: List[Dict[str, Any]],
     top_k: int,
     enable_collaboration: bool = True,
+    adaptive_collaboration: bool = True,
 ) -> Callable[[BenchTask], tuple[List[Item], float, int, float]]:
     def run(task: BenchTask) -> tuple[List[Item], float, int, float]:
         pipe = AgenticPipeline(corpus=corpus, top_n=top_k,
-                               enable_collaboration=enable_collaboration)
+                               enable_collaboration=enable_collaboration,
+                               adaptive_collaboration=adaptive_collaboration)
         if task.profile_tags:
             pipe.memory.update_profile(task.user_id, tags=task.profile_tags)
         result = pipe.run(task.query, user_id=task.user_id, scene=task.scene)
@@ -201,9 +203,11 @@ def evaluate_agentic(
     scenarios: List[Scenario],
     top_k: int = 5,
     enable_collaboration: bool = True,
+    adaptive_collaboration: bool = True,
 ) -> List[RunRow]:
     rows: List[RunRow] = []
-    run = agentic_runner(corpus, top_k, enable_collaboration=enable_collaboration)
+    run = agentic_runner(corpus, top_k, enable_collaboration=enable_collaboration,
+                         adaptive_collaboration=adaptive_collaboration)
     for scenario in scenarios:
         for task in scenario.tasks:
             items, latency_ms, trace_steps, cost = run(task)
@@ -270,7 +274,8 @@ def run_benchmark(top_k: int = 5) -> Dict[str, Any]:
     corpus = default_corpus()
     scenarios = default_scenarios()
     methods = {
-        "AgenticRec-Collab": evaluate_agentic(corpus, scenarios, top_k, enable_collaboration=True),
+        "AgenticRec-Gated": evaluate_agentic(corpus, scenarios, top_k, enable_collaboration=True, adaptive_collaboration=True),
+        "AgenticRec-Collab": evaluate_agentic(corpus, scenarios, top_k, enable_collaboration=True, adaptive_collaboration=False),
         "AgenticRec-Core": evaluate_agentic(corpus, scenarios, top_k, enable_collaboration=False),
         "HotBaseline": evaluate_baseline("HotBaseline", hot_baseline(corpus, top_k), scenarios, top_k),
         "TagBaseline": evaluate_baseline("TagBaseline", tag_baseline(corpus, top_k), scenarios, top_k),

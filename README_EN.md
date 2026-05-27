@@ -17,7 +17,7 @@ Recall -> Ranking -> Reranking -> Explanation / Monitoring
 
 Each stage is a fixed operator. It runs, passes its output downstream, and rarely reflects, negotiates, or changes tools dynamically.
 
-`AgenticRec` reframes this pipeline as a **collaborative council of specialized agents**. Stage 3 adds `CollaborationAgent`, a MACF-style layer that dynamically recruits similar-user agents and candidate-item agents:
+`AgenticRec` reframes this pipeline as a **collaborative council of specialized agents**. Stage 4 adds `IntentGate`, a deterministic gate that decides when the costly collaborative council should be activated:
 
 ```text
                   ┌──────────────────────────┐
@@ -28,8 +28,8 @@ Each stage is a fixed operator. It runs, passes its output downstream, and rarel
        ┌──────────┬──────────┼──────────┬──────────┐
        │          │          │          │          │
   ┌────▼────┐ ┌──▼─────┐ ┌──▼──────┐ ┌──▼─────┐ ┌──▼──────┐
-  │ Recall  │ │ Rank   │ │ Collab  │ │ Rerank │ │ Critic  │
-  │ Agent   │ │ Agent  │ │ Agent   │ │ Agent  │ │ Agent   │
+  │ Recall  │ │ Rank   │ │Intent │ │ Rerank │ │ Critic  │
+  │ Agent   │ │ Agent  │ │ Gate   │ │ Agent  │ │ Agent   │
   └─────────┘ └────────┘ └─────────┘ └────────┘ └─────────┘
        │          │          │          │          │
        └──────────┴──────┬───┴──────────┴──────────┘
@@ -40,6 +40,8 @@ Each stage is a fixed operator. It runs, passes its output downstream, and rarel
                   │ /Biz/ABTest │
                   └─────────────┘
 ```
+
+`IntentGate` reads query tags, user profile tags, candidate distribution, and scene after ranking. Stable intents stay on the core path; cold-start, interest-shift, or ambiguous requests activate `CollaborationAgent`.
 
 Each agent can own tools, memory, and decision logic. The goal is not to replace recommender models with LLMs, but to use agents as a **meta-decision layer** that decides which retrieval tools, ranking models, fallback strategies, business rules, and evaluation traces should be activated under different scenarios.
 
@@ -54,8 +56,8 @@ AgenticRec makes this meta-decision layer explicit, observable, and extensible.
 | Dimension | Conventional Pipeline | AgenticRec |
 |---|---|---|
 | Recall strategy | Fixed multi-channel recall | `RecallAgent` dynamically chooses tools and weights |
-| Cold start | Hard-coded fallback rules | `OrchestratorAgent` routes to cold-start behavior |
-| Long-tail intent | Difficult to recover | `CriticAgent` can veto and trigger retry |
+| Cold start | Hard-coded fallback rules | `IntentGate` identifies cold start and activates collaboration |
+| Interest shift | Difficult to recover | `IntentGate` detects query/profile mismatch and recruits user/item agents |
 | Explainability | Mostly offline attribution | `ExplainAgent` generates online explanations |
 | A/B iteration | Code change and deployment | Prompt/tool/agent policy can be iterated independently |
 
@@ -97,24 +99,30 @@ for item in results.items:
 - Skips ranking when the candidate set is small enough
 - Keeps latency-aware ranking behavior explicit
 
-### 3. CollaborationAgent
+### 3. IntentGate
+
+- Reads query tags, profile tags, candidate diversity, and scene
+- Skips collaboration for stable classic requests
+- Enables `CollaborationAgent` for cold-start, interest-shift, and ambiguous requests
+
+### 4. CollaborationAgent
 
 - Dynamically recruits similar-user agents and candidate-item agents
 - Lets recruited agents vote on candidate relevance
 - Blends collaborative scores back into the ranked list
 
-### 4. RerankAgent
+### 5. RerankAgent
 
 - Applies scene-aware business rules
 - Handles deduplication, freshness boost, diversification, and ad insertion
 - Checks business constraints before final output
 
-### 5. ExplainAgent
+### 6. ExplainAgent
 
 - Uses item metadata and user memory
 - Produces readable reasons for each recommended item
 
-### 6. CriticAgent
+### 7. CriticAgent
 
 - Acts as a guardrail rather than a generator
 - Checks distribution bias, intent drift, ad ratio, and other constraints
@@ -135,7 +143,7 @@ for item in results.items:
 It is not a replacement for industrial offline evaluation, but a reproducible credibility layer for the framework.
 
 - **3 scenarios**: `classic`, `cold_start`, `evolving_interest`
-- **4 methods**: `AgenticRec-Collab`, `AgenticRec-Core`, `HotBaseline`, `TagBaseline`
+- **5 methods**: `AgenticRec-Gated`, `AgenticRec-Collab`, `AgenticRec-Core`, `HotBaseline`, `TagBaseline`
 - **7 metrics**: `HitRate@K`, `NDCG@K`, `Coverage`, `Diversity`, `Latency`, `TraceSteps`, `TraceCost`
 - **9 tasks + 16 items**: no dataset download and no API key required
 
@@ -151,8 +159,9 @@ Example output:
 AgenticRec-Bench | tasks=9 corpus=16 top_k=5
 method          hit_rate@5       ndcg@5     coverage    diversity   latency_ms  trace_steps   trace_cost
 ---------------------------------------------------------------------------------------------------------
-AgenticRec-Collab      0.8889       0.7986          1.0       0.7099       0.2702            6          6.0
-AgenticRec-Core      0.8889       0.7778          1.0        0.716       0.1288            5          5.0
+AgenticRec-Gated      0.8889       0.8054          1.0       0.7099       0.7184       6.6667       6.6667
+AgenticRec-Collab      0.8889       0.7986          1.0       0.7099       1.3269            6          6.0
+AgenticRec-Core      0.8889       0.7778          1.0        0.716        0.679            5          5.0
 HotBaseline         0.6667       0.2553       0.3125       0.8667          0.0            0          0.0
 TagBaseline            1.0        0.907          1.0        0.663          0.0            0          0.0
 ```
@@ -166,6 +175,7 @@ This benchmark makes the core claim testable: AgenticRec not only produces recom
 - [x] Decision trace dumping
 - [x] Offline evaluation loop with HitRate/NDCG/Coverage/Diversity/Latency/TraceCost
 - [x] Stage 3 collaborative agents: `SimilarUserAgent`, `ItemAgent`, and `CollaborationAgent`
+- [x] Stage 4 adaptive collaboration gate: `IntentGate` and `AgenticRec-Gated`
 - [ ] OpenAI / Qwen / DeepSeek backbone adapters
 - [ ] Faiss / Milvus vector backend tools
 - [ ] LangGraph / OpenAI Agents SDK adapters
@@ -178,7 +188,7 @@ This benchmark makes the core claim testable: AgenticRec not only produces recom
 |---|---|---|
 | LangGraph / AutoGen | General multi-agent orchestration | Can be used as upstream backbones |
 | Lagent / SmolAgents | Minimal agent loops | Inspires the lightweight design |
-| MACF / MACRec | Multi-agent recommendation | Stage 3 borrows dynamic recruitment and central coordination ideas |
+| MACF / MACRec | Multi-agent recommendation | Stage 3 borrows dynamic recruitment; Stage 4 adds scenario gating to avoid always-on collaboration |
 | RecBole / EasyRec | Recommendation model libraries | Complementary: model zoo vs. orchestration layer |
 | Dify / Coze | General agent platforms | Different scope: general-purpose vs. search/recommendation-specific |
 
@@ -197,10 +207,10 @@ If this project helps your research or system design, please cite it as:
   year         = {2026},
   howpublished = {GitHub repository},
   url          = {https://github.com/guoxun/AgenticRec},
-  note         = {An agentic search and recommendation framework with tool orchestration, collaborative user/item agents, decision traces, and built-in benchmark evaluation}
+  note         = {An agentic search and recommendation framework with tool orchestration, adaptive collaboration gates, collaborative user/item agents, decision traces, and built-in benchmark evaluation}
 }
 ```
 
 Reference description:
 
-> AgenticRec is a lightweight agentic framework for search and recommendation systems. It transforms the traditional recall-ranking-reranking pipeline into a council of specialized agents coordinated by an orchestrator. The framework emphasizes tool orchestration, collaborative user/item agents, optional LLM reasoning, observable decision traces, and built-in benchmark evaluation for classic, cold-start, and evolving-interest recommendation scenarios.
+> AgenticRec is a lightweight agentic framework for search and recommendation systems. It transforms the traditional recall-ranking-reranking pipeline into a council of specialized agents coordinated by an orchestrator. The framework emphasizes tool orchestration, adaptive collaboration gates, collaborative user/item agents, optional LLM reasoning, observable decision traces, and built-in benchmark evaluation for classic, cold-start, and evolving-interest recommendation scenarios.

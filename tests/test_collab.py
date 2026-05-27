@@ -4,7 +4,7 @@ from agentic_rec.bench import default_corpus
 
 
 def test_collaboration_agent_appears_in_trace():
-    pipe = AgenticPipeline(corpus=default_corpus(), top_n=5, enable_collaboration=True)
+    pipe = AgenticPipeline(corpus=default_corpus(), top_n=5, enable_collaboration=True, adaptive_collaboration=False)
     pipe.memory.update_profile("u1", tags={"科幻": 0.8})
     result = pipe.run("最近想看科幻冒险", user_id="u1")
     agents = [event["agent"] for event in result.trace]

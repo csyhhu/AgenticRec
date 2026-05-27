@@ -10,6 +10,7 @@ from typing import Any, Dict, List
 
 from .collab import CollaborationOrchestrator, apply_collaboration_scores
 from .core import AgentMessage, BaseAgent, Decision, Item
+from .gating import IntentGate
 
 
 # ---------------------------------------------------------------------------
@@ -200,7 +201,8 @@ class OrchestratorAgent(BaseAgent):
 
     def __init__(self, llm=None, tools=None, memory=None,
                  recall=None, rank=None, collab=None, rerank=None,
-                 explain=None, critic=None, max_retry: int = 1) -> None:
+                 explain=None, critic=None, intent_gate: IntentGate | None = None,
+                 max_retry: int = 1) -> None:
         super().__init__(llm=llm, tools=tools, memory=memory)
         self.recall = recall
         self.rank = rank
@@ -208,6 +210,7 @@ class OrchestratorAgent(BaseAgent):
         self.rerank = rerank
         self.explain = explain
         self.critic = critic
+        self.intent_gate = intent_gate
         self.max_retry = max_retry
 
     def step(self, msg: AgentMessage, ctx: Dict[str, Any]) -> Decision:
@@ -227,14 +230,37 @@ class OrchestratorAgent(BaseAgent):
             trace.add(d_rank)
             items = d_rank.payload
 
-            # 3) optional multi-agent collaboration
+            # 3) optional multi-agent collaboration, guarded by Stage 4 intent gate
             if self.collab is not None:
-                d_collab = self.collab.run(
-                    AgentMessage(self.name, self.collab.name, "request",
-                                 content={"items": items}), ctx)
-                trace.add(d_collab)
-                items = d_collab.payload["items"]
-                ctx["collaboration"] = d_collab.payload["report"]
+                gate_decision = None
+                if self.intent_gate is not None:
+                    profile = self.memory.profile_of(ctx["user_id"])
+                    gate_decision = self.intent_gate.decide(
+                        query=ctx["query"],
+                        user_tags=profile.get("tags", {}),
+                        items=items,
+                        scene=ctx.get("scene", "feed_home"),
+                    )
+                    ctx["intent_gate"] = gate_decision
+                    trace.add(Decision(
+                        agent=self.intent_gate.name,
+                        thought="; ".join(gate_decision.reasons),
+                        action="enable_collaboration" if gate_decision.enable_collaboration else "skip_collaboration",
+                        payload={
+                            "enable_collaboration": gate_decision.enable_collaboration,
+                            "scenario": gate_decision.scenario,
+                            "confidence": gate_decision.confidence,
+                            "signals": gate_decision.signals,
+                        },
+                    ))
+                should_collaborate = gate_decision.enable_collaboration if gate_decision else True
+                if should_collaborate:
+                    d_collab = self.collab.run(
+                        AgentMessage(self.name, self.collab.name, "request",
+                                     content={"items": items}), ctx)
+                    trace.add(d_collab)
+                    items = d_collab.payload["items"]
+                    ctx["collaboration"] = d_collab.payload["report"]
 
             # 4) rerank
             d_re = self.rerank.run(

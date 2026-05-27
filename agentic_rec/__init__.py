@@ -12,6 +12,7 @@ from .core import (
     Decision,
     Trace,
 )
+from .gating import GateDecision, IntentGate
 from .llm import BaseLLM, MockLLM, DeepSeekLLM
 from .agents import (
     RecallAgent,
@@ -35,6 +36,8 @@ __all__ = [
     "Item",
     "Decision",
     "Trace",
+    "GateDecision",
+    "IntentGate",
     "BaseLLM",
     "MockLLM",
     "DeepSeekLLM",
