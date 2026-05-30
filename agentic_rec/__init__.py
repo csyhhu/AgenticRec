@@ -26,6 +26,15 @@ from .agents import (
 from .collab import AgentProfile, CollaborationReport, PreferenceVote
 from .pipeline import AgenticPipeline, PipelineResult
 from .tools import VectorTool, TagTool, FeatureTool, BizRuleTool, HotTool
+from .vector_backend import (
+    ExternalVectorBackend,
+    FaissVectorBackend,
+    HashEmbedding,
+    InMemoryVectorBackend,
+    MilvusVectorBackend,
+    VectorBackend,
+    VectorHit,
+)
 
 __all__ = [
     "AgentMessage",
@@ -58,6 +67,13 @@ __all__ = [
     "FeatureTool",
     "BizRuleTool",
     "HotTool",
+    "ExternalVectorBackend",
+    "FaissVectorBackend",
+    "HashEmbedding",
+    "InMemoryVectorBackend",
+    "MilvusVectorBackend",
+    "VectorBackend",
+    "VectorHit",
 ]
 
 __version__ = "0.1.0"

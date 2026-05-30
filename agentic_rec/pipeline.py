@@ -18,6 +18,7 @@ from .core import AgentMessage, Item, Memory, ToolRegistry, Trace
 from .gating import IntentGate
 from .llm import BaseLLM, MockLLM
 from .tools import BizRuleTool, FeatureTool, HotTool, TagTool, VectorTool
+from .vector_backend import VectorBackend
 
 
 @dataclass
@@ -40,6 +41,7 @@ class AgenticPipeline:
         enable_collaboration: bool = True,
         adaptive_collaboration: bool = True,
         intent_gate: Optional[IntentGate] = None,
+        vector_backend: Optional[VectorBackend] = None,
         neighbor_profiles: Optional[List[AgentProfile]] = None,
     ) -> None:
         self.llm = llm or MockLLM()
@@ -49,10 +51,11 @@ class AgenticPipeline:
         self.enable_collaboration = enable_collaboration
         self.adaptive_collaboration = adaptive_collaboration
         self.intent_gate = intent_gate or (IntentGate() if adaptive_collaboration else None)
+        self.vector_backend = vector_backend
         self.neighbor_profiles = neighbor_profiles or (build_neighbor_profiles(corpus) if corpus else [])
 
         if corpus and not self.tools.names():
-            self.tools.register(VectorTool(corpus))
+            self.tools.register(VectorTool(corpus, backend=vector_backend))
             self.tools.register(TagTool(corpus))
             self.tools.register(HotTool(corpus))
             self.tools.register(FeatureTool(corpus))

@@ -10,6 +10,7 @@ import math
 from typing import Any, Dict, List, Optional
 
 from .core import Item, Tool
+from .vector_backend import InMemoryVectorBackend, VectorBackend
 
 
 def _h(s: str, mod: int = 10_000) -> int:
@@ -31,22 +32,23 @@ def _sim(a: str, b: str) -> float:
 
 # ---------------------------------------------------------------------------
 class VectorTool(Tool):
-    """Approximate vector recall over an in-memory item corpus."""
+    """Vector recall backed by a pluggable vector backend."""
 
     name = "vector"
     description = "dense retrieval by semantic similarity"
 
-    def __init__(self, corpus: List[Dict[str, Any]]) -> None:
+    def __init__(self, corpus: List[Dict[str, Any]], backend: VectorBackend | None = None) -> None:
         # corpus item: {id, title, tags:[...]}
         self.corpus = corpus
+        self.backend = backend or InMemoryVectorBackend()
+        self.backend.add(corpus)
 
     def __call__(self, query: str = "", top_k: int = 50, **_: Any) -> List[Item]:
-        scored = []
-        for c in self.corpus:
-            s = _sim(query, c.get("title", ""))
-            scored.append(Item(id=c["id"], score=s, features=dict(c), source="vector"))
-        scored.sort(key=lambda x: -x.score)
-        return scored[:top_k]
+        hits = self.backend.search(query=query, top_k=top_k)
+        return [
+            Item(id=hit.id, score=hit.score, features=dict(hit.payload), source=f"vector:{self.backend.name}")
+            for hit in hits
+        ]
 
 
 # ---------------------------------------------------------------------------
