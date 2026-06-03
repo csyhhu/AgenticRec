@@ -4,7 +4,7 @@
 
 [English README](README_EN.md) | 中文说明
 
-知乎参考文章：
+知乎发布文章：
 把搜广推从「管线」重构成「议会」｜AgenticRec：一个 1200 行的轻量级智能体推荐框架
 https://zhuanlan.zhihu.com/p/2039843956624725473
 
