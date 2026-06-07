@@ -143,6 +143,22 @@ def intra_list_diversity(recommended: Sequence[str], corpus_index: Dict[str, Dic
     return distance_sum / pairs if pairs else 0.0
 
 
+def recall_at_k(recommended: Sequence[str], relevant: Sequence[str], k: int) -> float:
+    rel = set(relevant)
+    if not rel:
+        return 0.0
+    hits = sum(1 for item_id in recommended[:k] if item_id in rel)
+    return hits / len(rel)
+
+
+def mrr_at_k(recommended: Sequence[str], relevant: Sequence[str], k: int) -> float:
+    rel = set(relevant)
+    for idx, item_id in enumerate(recommended[:k], start=1):
+        if item_id in rel:
+            return 1.0 / idx
+    return 0.0
+
+
 def trace_cost(trace: List[Dict[str, Any]]) -> float:
     # Lightweight proxy: each agent step costs 1, each veto costs 2 extra.
     return float(len(trace) + 2 * sum(1 for ev in trace if ev.get("action") == "veto"))
@@ -172,6 +188,92 @@ def tag_baseline(corpus: List[Dict[str, Any]], top_k: int) -> Callable[[BenchTas
             if score > 0:
                 out.append(Item(id=item["id"], score=score, features=item, source="tag_baseline"))
         out.sort(key=lambda x: -x.score)
+        return out[:top_k]
+
+    return run
+
+
+def item_knn_baseline(
+    corpus: List[Dict[str, Any]],
+    user_train_map: Dict[str, Dict[str, float]],
+    top_k: int,
+    knn_k: int = 50,
+) -> Callable[[BenchTask], List[Item]]:
+    """ItemKNN collaborative filtering baseline.
+
+    Builds an item-item similarity matrix from user ratings (cosine similarity
+    over rating vectors), then scores unseen items by aggregating the
+    similarities to items the user has already rated positively.
+
+    Parameters
+    ----------
+    corpus : List[Dict]
+        Item catalogue.
+    user_train_map : Dict[str, Dict[str, float]]
+        Mapping from user_id -> {item_id: rating, ...} for training split only.
+    top_k : int
+        Number of items to return.
+    knn_k : int
+        Number of nearest neighbours to consider per item.
+    """
+    item_ids = [item["id"] for item in corpus]
+    item_set = set(item_ids)
+
+    # Build item-rating vectors: item_id -> {user_id: rating}
+    item_vectors: Dict[str, Dict[str, float]] = defaultdict(dict)
+    for uid, ratings in user_train_map.items():
+        for iid, r in ratings.items():
+            item_vectors[iid][uid] = r
+
+    # Compute item-item cosine similarity
+    def cosine(a: Dict[str, float], b: Dict[str, float]) -> float:
+        common = set(a) & set(b)
+        if not common:
+            return 0.0
+        dot = sum(a[u] * b[u] for u in common)
+        norm_a = math.sqrt(sum(v * v for v in a.values()))
+        norm_b = math.sqrt(sum(v * v for v in b.values()))
+        return dot / (norm_a * norm_b) if norm_a and norm_b else 0.0
+
+    # Build top-K nearest neighbours for each item (cached)
+    item_neighbors: Dict[str, List[tuple[str, float]]] = {}
+    all_ids = list(item_vectors.keys())
+    for i, iid in enumerate(all_ids):
+        if i % 500 == 0:
+            pass  # progress marker
+        sims = []
+        vec_i = item_vectors[iid]
+        for jid in all_ids:
+            if jid == iid:
+                continue
+            s = cosine(vec_i, item_vectors[jid])
+            if s > 0:
+                sims.append((jid, s))
+        sims.sort(key=lambda x: -x[1])
+        item_neighbors[iid] = sims[:knn_k]
+
+    def run(task: BenchTask) -> List[Item]:
+        uid = task.user_id
+        user_ratings = user_train_map.get(uid, {})
+        if not user_ratings:
+            # Fall back to hot baseline for true cold-start users
+            return hot_baseline(corpus, top_k)(task)
+
+        # Score each item by weighted sum of similarities to user's rated items
+        scores: Dict[str, float] = defaultdict(float)
+        rated_items = {iid: r for iid, r in user_ratings.items() if r >= 3.0}
+        for rated_iid, rating in rated_items.items():
+            weight = (rating - 2.5) / 2.5  # centre around 0, range ~[-1, 1]
+            for neighbor_iid, sim in item_neighbors.get(rated_iid, []):
+                if neighbor_iid not in rated_items:
+                    scores[neighbor_iid] += sim * weight
+
+        # Build result
+        out: List[Item] = []
+        corpus_index = {item["id"]: item for item in corpus}
+        for iid, score in sorted(scores.items(), key=lambda x: -x[1]):
+            if iid in corpus_index:
+                out.append(Item(id=iid, score=score, features=corpus_index[iid], source="item_knn"))
         return out[:top_k]
 
     return run
@@ -256,6 +358,8 @@ def summarize(rows: List[RunRow], corpus: List[Dict[str, Any]], top_k: int) -> D
     def summary_for(part: List[RunRow]) -> Dict[str, float]:
         return {
             f"hit_rate@{top_k}": round(mean(hit_rate_at_k(r.recommended, r.relevant, top_k) for r in part), 4),
+            f"recall@{top_k}": round(mean(recall_at_k(r.recommended, r.relevant, top_k) for r in part), 4),
+            f"mrr@{top_k}": round(mean(mrr_at_k(r.recommended, r.relevant, top_k) for r in part), 4),
             f"ndcg@{top_k}": round(mean(ndcg_at_k(r.recommended, r.relevant, top_k) for r in part), 4),
             "coverage": round(coverage((r.recommended for r in part), len(corpus)), 4),
             "diversity": round(mean(intra_list_diversity(r.recommended, corpus_index) for r in part), 4),
@@ -273,12 +377,29 @@ def summarize(rows: List[RunRow], corpus: List[Dict[str, Any]], top_k: int) -> D
 def run_benchmark(top_k: int = 5) -> Dict[str, Any]:
     corpus = default_corpus()
     scenarios = default_scenarios()
+
+    # Build user_train_map from scenario profile_tags for ItemKNN
+    user_train_map: Dict[str, Dict[str, float]] = {}
+    for scenario in scenarios:
+        for task in scenario.tasks:
+            if task.profile_tags:
+                # Synthesize a pseudo rating map: tags -> rated items
+                user_items: Dict[str, float] = {}
+                for item in corpus:
+                    item_tags = set(item.get("tags", []))
+                    tag_match = sum(task.profile_tags.get(t, 0) for t in item_tags)
+                    if tag_match > 0.2:
+                        user_items[item["id"]] = min(5.0, 3.0 + tag_match * 2)
+                if user_items:
+                    user_train_map[task.user_id] = user_items
+
     methods = {
         "AgenticRec-Gated": evaluate_agentic(corpus, scenarios, top_k, enable_collaboration=True, adaptive_collaboration=True),
         "AgenticRec-Collab": evaluate_agentic(corpus, scenarios, top_k, enable_collaboration=True, adaptive_collaboration=False),
         "AgenticRec-Core": evaluate_agentic(corpus, scenarios, top_k, enable_collaboration=False),
-        "HotBaseline": evaluate_baseline("HotBaseline", hot_baseline(corpus, top_k), scenarios, top_k),
+        "ItemKNN": evaluate_baseline("ItemKNN", item_knn_baseline(corpus, user_train_map, top_k), scenarios, top_k),
         "TagBaseline": evaluate_baseline("TagBaseline", tag_baseline(corpus, top_k), scenarios, top_k),
+        "HotBaseline": evaluate_baseline("HotBaseline", hot_baseline(corpus, top_k), scenarios, top_k),
     }
     return {
         "top_k": top_k,
@@ -297,14 +418,15 @@ def run_benchmark(top_k: int = 5) -> Dict[str, Any]:
 def print_report(report: Dict[str, Any]) -> None:
     k = report["top_k"]
     print(f"AgenticRec-Bench | tasks={report['tasks']} corpus={report['corpus_size']} top_k={k}\n")
-    metric_names = [f"hit_rate@{k}", f"ndcg@{k}", "coverage", "diversity", "latency_ms", "trace_steps", "trace_cost"]
-    header = "method".ljust(14) + " ".join(name.rjust(12) for name in metric_names)
+    metric_names = [f"hit_rate@{k}", f"recall@{k}", f"mrr@{k}", f"ndcg@{k}",
+                    "coverage", "diversity", "latency_ms", "trace_steps", "trace_cost"]
+    header = "method".ljust(20) + " ".join(name.rjust(12) for name in metric_names)
     print(header)
     print("-" * len(header))
     for method, payload in report["methods"].items():
         overall = payload["summary"]["overall"]
         values = " ".join(str(overall[name]).rjust(12) for name in metric_names)
-        print(method.ljust(14) + values)
+        print(method.ljust(20) + values)
     print("\nBy scenario")
     for method, payload in report["methods"].items():
         print(f"\n[{method}]")

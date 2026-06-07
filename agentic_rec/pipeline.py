@@ -44,6 +44,7 @@ class AgenticPipeline:
         vector_backend: Optional[VectorBackend] = None,
         neighbor_profiles: Optional[List[AgentProfile]] = None,
     ) -> None:
+
         self.llm = llm or MockLLM()
         self.memory = memory or Memory()
         self.tools = tools or ToolRegistry()
@@ -81,11 +82,9 @@ class AgenticPipeline:
             explain=self.explain, critic=self.critic, intent_gate=self.intent_gate,
         )
 
-    def run(self, query: str, user_id: str = "anon",
-            scene: str = "feed_home") -> PipelineResult:
+    def run(self, query: str, user_id: str = "anon", scene: str = "feed_home") -> PipelineResult:
         trace = Trace()
         ctx = {"query": query, "user_id": user_id, "scene": scene, "trace": trace}
         d = self.orch.run(AgentMessage("user", self.orch.name, "request"), ctx)
         items = d.payload[: self.top_n]
-        return PipelineResult(items=items, trace=trace.dump(),
-                              total_ms=trace.total_ms())
+        return PipelineResult(items=items, trace=trace.dump(), total_ms=trace.total_ms())

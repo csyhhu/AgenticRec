@@ -218,15 +218,12 @@ class OrchestratorAgent(BaseAgent):
 
         for attempt in range(self.max_retry + 1):
             # 1) recall
-            d_recall = self.recall.run(
-                AgentMessage(self.name, self.recall.name, "request"), ctx)
+            d_recall = self.recall.run(AgentMessage(self.name, self.recall.name, "request"), ctx)
             trace.add(d_recall)
             items = d_recall.payload
 
             # 2) rank
-            d_rank = self.rank.run(
-                AgentMessage(self.name, self.rank.name, "request",
-                             content={"items": items}), ctx)
+            d_rank = self.rank.run(AgentMessage(self.name, self.rank.name, "request", content={"items": items}), ctx)
             trace.add(d_rank)
             items = d_rank.payload
 
