@@ -185,14 +185,16 @@ agentic-rec-serve
 
 ## AgenticRec-Bench
 
-`AgenticRec` 现在内置一个零依赖评测闭环：`AgenticRec-Bench`。
+`AgenticRec` 内置两层评测闭环，覆盖从微缩数据集到公开大规模数据集的完整验证链路。
 
-它不是工业离线评测的替代品，而是一个可执行的可信度层：
+### 内置微缩评测（零依赖，秒级复现）
+
+适合快速验证框架功能，无需下载任何数据：
 
 - **3 类场景**：`classic` / `cold_start` / `evolving_interest`
 - **5 个方法**：`AgenticRec-Gated` / `AgenticRec-Collab` / `AgenticRec-Core` / `HotBaseline` / `TagBaseline`
 - **7 个指标**：`HitRate@K`、`NDCG@K`、`Coverage`、`Diversity`、`Latency`、`TraceSteps`、`TraceCost`
-- **9 个任务 + 16 个 item**：无需下载数据、无需 API key，克隆后即可复现
+- **9 个任务 + 15 个 item**：无需下载数据、无需 API key，克隆后即可复现
 
 ```bash
 PYTHONPATH=. python -m agentic_rec.bench
@@ -213,6 +215,38 @@ HotBaseline         0.6667       0.2553       0.3125       0.8667          0.0  
 TagBaseline            1.0        0.907          1.0        0.663          0.0            0          0.0
 ```
 
+### MovieLens-1M 公开数据集评测
+
+在 3,883 部电影、6,040 用户、1M 评分上的完整评测，验证 AgenticRec 在真实大规模数据上的表现：
+
+- **数据适配**：`MovieLensAdapter` 将 MovieLens-1M 自动转换为 AgenticRec 原生格式（corpus / scenarios / neighbor profiles）
+- **3 类场景**：`classic` (199 tasks) / `cold_start` (190 tasks) / `evolving_interest` (178 tasks)
+- **6 个方法**：AgenticRec 3 变体 + ItemKNN + TagBaseline + HotBaseline
+- **9 个指标**：HR@5 / Recall@5 / MRR@5 / NDCG@5 / Coverage / Diversity / Latency / GateRate / VetoRate
+
+```bash
+# 下载 MovieLens-1M 到 ~/.agentic_rec/ml-1m/
+# 快速测试（每场景 30 tasks）
+python examples/run_movielens_bench.py --max-tasks 30
+
+# 完整评测
+python examples/run_movielens_bench.py
+
+# 自定义 top-K，导出 JSON
+python examples/run_movielens_bench.py --top-k 10 --json --output report.json
+```
+
+示例结果（150 tasks, top_k=5）：
+
+| Method | HR@5 | Recall@5 | MRR@5 | NDCG@5 | Diversity |
+|--------|------|----------|-------|--------|-----------|
+| ItemKNN | 12.67% | 2.39% | 6.67% | 3.27% | 63.37% |
+| HotBaseline | 11.33% | 2.22% | 6.17% | 2.89% | 62.17% |
+| **AgenticRec-Core** | **9.33%** | **1.55%** | **3.89%** | **1.98%** | **78.93%** |
+| TagBaseline | 5.33% | 0.89% | 2.06% | 1.03% | 25.91% |
+
+> **关键发现**：AgenticRec-Core 的 Diversity (78.93%) 远超所有 baseline，Coverage 是 HotBaseline 的 23 倍，体现了混合召回 (vector + tag + hot) 天然产出的多样性优势。详见 [Tutorial.md](./Tutorial.md) 第 15 节。
+
 > 这让 AgenticRec 的核心主张可被验证：Agent 层不仅产出推荐列表，还产出可观测的决策 trace，可用于 A/B、回放和策略调试。
 
 ## 路线图
@@ -226,6 +260,7 @@ TagBaseline            1.0        0.907          1.0        0.663          0.0  
 - [x] 第四阶段自适应协同闸门（IntentGate / Gated Collaboration）
 - [x] 第五阶段可插拔向量后端（VectorBackend / InMemory / Faiss / Milvus adapter seam）
 - [x] 第六阶段请求级 Trace API + Replay（AgenticRecService / TraceStore / replay_trace）
+- [x] 第七阶段公开数据集评测（MovieLens-1M Adapter / 6 方法 × 9 指标 × 3 场景）
 - [ ] Faiss / Milvus 生产级索引接入示例
 - [ ] LangGraph / OpenAI-Agents-SDK 对接 Adapter
 - [ ] Trace Dashboard 可视化面板
@@ -241,6 +276,17 @@ TagBaseline            1.0        0.907          1.0        0.663          0.0  
 | Faiss / Milvus | 向量检索后端 | Stage 5 提供 `VectorBackend` adapter seam，可替换默认 in-memory 后端 |
 | RecBole / EasyRec | 推荐算法库 | 互补（前者是模型动物园，本项目是编排骨架）|
 | Dify / Coze | 通用 Agent 平台 | 不重叠（通用 vs 搜广推垂直）|
+| MovieLens-1M | 公开推荐数据集 | 第七阶段接入，提供完整数据适配与评测，验证框架在真实数据上的有效性 |
+
+## 深入了解
+
+如果想详尽了解 AgenticRec 的架构设计、Agent 深度分析、MovieLens-1M 实验全流程及 Related Works，请阅读 **[Tutorial.md](./Tutorial.md)**：
+
+- 第 12 节：quickstart.py 执行流程（6 个 Stage 的完整链路）
+- 第 13 节：Agent 是包装还是真 Agent？—— 诚实评估
+- 第 14 节：Agentic Recommendation 分级定义
+- 第 15 节：MovieLens-1M 公开数据集实验（数据适配、评测方法、结果分析、改进方向）
+- 第 16 节：Related Works（MACF、InteRecAgent、Agent4Rec 等）
 
 ## License
 
