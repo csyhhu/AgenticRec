@@ -17,7 +17,7 @@ Recall -> Ranking -> Reranking -> Explanation / Monitoring
 
 Each stage is a fixed operator. It runs, passes its output downstream, and rarely reflects, negotiates, or changes tools dynamically.
 
-`AgenticRec` reframes this pipeline as a **collaborative council of specialized agents**. Stage 5 adds a pluggable `VectorBackend` seam, so recall can move from demo similarity to real vector retrieval backends:
+`AgenticRec` reframes this pipeline as a **collaborative council of specialized agents**. Stage 5 adds a pluggable `VectorBackend` seam, and Stage 6 adds a request-level `Trace API` plus replay layer so the framework can move from offline demo to debuggable service prototype:
 
 ```text
                   ┌──────────────────────────┐
@@ -41,7 +41,7 @@ Each stage is a fixed operator. It runs, passes its output downstream, and rarel
                   └─────────────┘
 ```
 
-`VectorBackend` decouples `VectorTool` from a concrete vector service. The default `InMemoryVectorBackend` keeps the project dependency-free and reproducible, while production users can replace it with Faiss, Milvus, or an internal vector retrieval service. `IntentGate` still decides when to activate collaboration.
+`VectorBackend` decouples `VectorTool` from a concrete vector service. The default `InMemoryVectorBackend` keeps the project dependency-free and reproducible, while production users can replace it with Faiss, Milvus, or an internal vector retrieval service. The new `Trace API` stores request-level candidates, decisions, and final results for replay. `IntentGate` still decides when to activate collaboration.
 
 Each agent can own tools, memory, and decision logic. The goal is not to replace recommender models with LLMs, but to use agents as a **meta-decision layer** that decides which retrieval tools, ranking models, fallback strategies, business rules, and evaluation traces should be activated under different scenarios.
 
@@ -156,6 +156,29 @@ Built-in backends:
 - `MilvusVectorBackend`: adapter placeholder for online vector services
 - `ExternalVectorBackend`: base class for internal vector retrieval services
 
+## Trace API and Replay
+
+Stage 6 adds `agentic_rec/service.py`, a dependency-free JSON service facade around the offline pipeline:
+
+```python
+from agentic_rec import AgenticPipeline, AgenticRecService
+
+service = AgenticRecService(AgenticPipeline())
+response = service.recommend("sci-fi adventure", user_id="u1")
+replay = service.replay(response["request_id"])
+```
+
+You can also run a local debugging service:
+
+```bash
+agentic-rec-serve
+# http://127.0.0.1:8765/recommend?query=sci-fi&user_id=u1
+# http://127.0.0.1:8765/traces
+# http://127.0.0.1:8765/replay/{request_id}
+```
+
+`TraceStore` records `query / user / scene / items / trace / total_ms` per request, while `replay_trace()` converts the agent decision chain into a readable timeline for online debugging, A/B sample review, and trace-dashboard prototypes.
+
 ## AgenticRec-Bench
 
 `AgenticRec` includes a zero-dependency evaluation loop: **AgenticRec-Bench**.
@@ -179,9 +202,9 @@ Example output:
 AgenticRec-Bench | tasks=9 corpus=16 top_k=5
 method          hit_rate@5       ndcg@5     coverage    diversity   latency_ms  trace_steps   trace_cost
 ---------------------------------------------------------------------------------------------------------
-AgenticRec-Gated      0.8889       0.7986          1.0       0.6975       0.9583       6.6667       6.6667
-AgenticRec-Collab      0.8889       0.7917          1.0       0.6975        0.843            6          6.0
-AgenticRec-Core      0.8889       0.7778          1.0       0.6852       0.7521            5          5.0
+AgenticRec-Gated      0.8889       0.7986          1.0       0.6975       0.8359       6.6667       6.6667
+AgenticRec-Collab      0.8889       0.7917          1.0       0.6975       1.4877            6          6.0
+AgenticRec-Core      0.8889       0.7778          1.0       0.6852       1.3959            5          5.0
 HotBaseline         0.6667       0.2553       0.3125       0.8667          0.0            0          0.0
 TagBaseline            1.0        0.907          1.0        0.663          0.0            0          0.0
 ```
@@ -197,10 +220,11 @@ This benchmark makes the core claim testable: AgenticRec not only produces recom
 - [x] Stage 3 collaborative agents: `SimilarUserAgent`, `ItemAgent`, and `CollaborationAgent`
 - [x] Stage 4 adaptive collaboration gate: `IntentGate` and `AgenticRec-Gated`
 - [x] Stage 5 pluggable vector backends: `VectorBackend`, in-memory, Faiss/Milvus adapter seam
+- [x] Stage 6 request-level Trace API and replay: `AgenticRecService`, `TraceStore`, `replay_trace`
 - [ ] OpenAI / Qwen / DeepSeek backbone adapters
 - [ ] Production Faiss / Milvus index examples
 - [ ] LangGraph / OpenAI Agents SDK adapters
-- [ ] FastAPI service and trace dashboard
+- [ ] Trace dashboard UI
 - [ ] Industrial blueprints for e-commerce, short-video feed, and site search
 
 ## Relation to Existing Frameworks

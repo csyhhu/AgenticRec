@@ -19,7 +19,7 @@ https://zhuanlan.zhihu.com/p/2039843956624725473
 传统搜广推系统是一条**串行管线**：召回 → 粗排 → 精排 → 重排。  
 每一段是一个固定的算子，跑完就走，**不会反思、不会争辩、不会换工具**。
 
-`AgenticRec` 把这条管线**翻译成五个核心 Agent**，并在第五阶段加入可插拔 `VectorBackend`，让召回层可以从 demo 字符串相似度升级为真实向量后端：
+`AgenticRec` 把这条管线**翻译成五个核心 Agent**，第五阶段加入可插拔 `VectorBackend`，第六阶段新增请求级 `Trace API` 与 `Replay`，让框架从离线 demo 走向可调试服务原型：
 
 ```
                   ┌──────────────────────────┐
@@ -43,7 +43,7 @@ https://zhuanlan.zhihu.com/p/2039843956624725473
                   └─────────────┘
 ```
 
-`VectorBackend` 会把 `VectorTool` 和真实向量服务解耦：默认 `InMemoryVectorBackend` 零依赖可复现，生产侧可以替换为 Faiss、Milvus 或内部向量检索服务；`IntentGate` 继续负责决定是否启用协同议会。
+`VectorBackend` 会把 `VectorTool` 和真实向量服务解耦：默认 `InMemoryVectorBackend` 零依赖可复现，生产侧可以替换为 Faiss、Milvus 或内部向量检索服务；`Trace API` 会把每次请求的候选、决策链和最终结果保存为可回放记录；`IntentGate` 继续负责决定是否启用协同议会。
 
 每个 Agent：
 - 持有自己的**工具**（向量检索、特征服务、业务规则、A/B 实验）
@@ -160,6 +160,29 @@ pipeline = AgenticPipeline(
 - `MilvusVectorBackend`：预留 Milvus adapter 接口，适合在线向量服务
 - `ExternalVectorBackend`：给公司内部向量检索服务继承实现
 
+## Trace API 与请求回放
+
+第六阶段新增 `agentic_rec/service.py`，把离线 pipeline 包成一个零依赖 JSON 服务层：
+
+```python
+from agentic_rec import AgenticPipeline, AgenticRecService
+
+service = AgenticRecService(AgenticPipeline())
+response = service.recommend("科幻冒险", user_id="u1")
+replay = service.replay(response["request_id"])
+```
+
+也可以启动本地调试服务：
+
+```bash
+agentic-rec-serve
+# http://127.0.0.1:8765/recommend?query=科幻冒险&user_id=u1
+# http://127.0.0.1:8765/traces
+# http://127.0.0.1:8765/replay/{request_id}
+```
+
+`TraceStore` 会记录请求级 `query / user / scene / items / trace / total_ms`，`replay_trace()` 会把 Agent 决策链压成可读 timeline，适合做线上问题定位、A/B 样本复盘和 Trace Dashboard 原型。
+
 ## AgenticRec-Bench
 
 `AgenticRec` 现在内置一个零依赖评测闭环：`AgenticRec-Bench`。
@@ -183,9 +206,9 @@ agentic-rec-bench --top-k 5
 AgenticRec-Bench | tasks=9 corpus=16 top_k=5
 method          hit_rate@5       ndcg@5     coverage    diversity   latency_ms  trace_steps   trace_cost
 ---------------------------------------------------------------------------------------------------------
-AgenticRec-Gated      0.8889       0.7986          1.0       0.6975       0.9583       6.6667       6.6667
-AgenticRec-Collab      0.8889       0.7917          1.0       0.6975        0.843            6          6.0
-AgenticRec-Core      0.8889       0.7778          1.0       0.6852       0.7521            5          5.0
+AgenticRec-Gated      0.8889       0.7986          1.0       0.6975       0.8359       6.6667       6.6667
+AgenticRec-Collab      0.8889       0.7917          1.0       0.6975       1.4877            6          6.0
+AgenticRec-Core      0.8889       0.7778          1.0       0.6852       1.3959            5          5.0
 HotBaseline         0.6667       0.2553       0.3125       0.8667          0.0            0          0.0
 TagBaseline            1.0        0.907          1.0        0.663          0.0            0          0.0
 ```
@@ -202,9 +225,10 @@ TagBaseline            1.0        0.907          1.0        0.663          0.0  
 - [x] 第三阶段多智能体协同（SimilarUserAgent / ItemAgent / CollaborationAgent）
 - [x] 第四阶段自适应协同闸门（IntentGate / Gated Collaboration）
 - [x] 第五阶段可插拔向量后端（VectorBackend / InMemory / Faiss / Milvus adapter seam）
+- [x] 第六阶段请求级 Trace API + Replay（AgenticRecService / TraceStore / replay_trace）
 - [ ] Faiss / Milvus 生产级索引接入示例
 - [ ] LangGraph / OpenAI-Agents-SDK 对接 Adapter
-- [ ] 在线服务化（FastAPI）+ Trace Dashboard
+- [ ] Trace Dashboard 可视化面板
 - [ ] 工业场景蓝本：电商首页 / 短视频 Feed / 站内搜索
 
 ## 与已有框架的关系

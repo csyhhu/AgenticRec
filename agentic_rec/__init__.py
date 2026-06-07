@@ -25,6 +25,7 @@ from .agents import (
 )
 from .collab import AgentProfile, CollaborationReport, PreferenceVote
 from .pipeline import AgenticPipeline, PipelineResult
+from .service import AgenticRecService, TraceRecord, TraceStore, replay_trace, serve
 from .tools import VectorTool, TagTool, FeatureTool, BizRuleTool, HotTool
 from .vector_backend import (
     ExternalVectorBackend,
@@ -62,6 +63,11 @@ __all__ = [
     "PreferenceVote",
     "AgenticPipeline",
     "PipelineResult",
+    "AgenticRecService",
+    "TraceRecord",
+    "TraceStore",
+    "replay_trace",
+    "serve",
     "VectorTool",
     "TagTool",
     "FeatureTool",

@@ -21,6 +21,7 @@ dependencies = []
 
 [project.scripts]
 agentic-rec-bench = "agentic_rec.bench:main"
+agentic-rec-serve = "agentic_rec.service:main"
 
 [project.optional-dependencies]
 dev = ["pytest>=7"]
